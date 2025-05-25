@@ -1,0 +1,80 @@
+# Import necessary libraries
+import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
+import matplotlib.pyplot as plt
+
+# --- 1. Generate a synthetic dataset ---
+# For simplicity, we'll create a synthetic dataset that mimics a linear relationship.
+# In a real-world scenario, you would load a publicly available dataset here.
+# Example: X (input feature - e.g., study hours), y (output - e.g., exam score)
+
+# Number of samples
+n_samples = 100
+
+# Generate a single input feature (X)
+# np.random.rand(n_samples, 1) creates an array of random numbers between 0 and 1,
+# then we scale it to be between 0 and 10.
+X = 10 * np.random.rand(n_samples, 1)
+
+# Generate the output (y) with a linear relationship and some random noise
+# y = 2 * X + 1 + noise
+y = 2 * X + 1 + np.random.randn(n_samples, 1) * 2
+
+print("--- Dataset Snapshot ---")
+print(f"First 5 X values:\n{X[:5].flatten()}")
+print(f"First 5 y values:\n{y[:5].flatten()}")
+print("-" * 25)
+
+# --- 2. Split the dataset into training and testing sets ---
+# This is crucial to evaluate the model's performance on unseen data.
+# test_size=0.2 means 20% of the data will be used for testing, 80% for training.
+# random_state ensures reproducibility of the split.
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+print(f"\nTraining data shape: X_train={X_train.shape}, y_train={y_train.shape}")
+print(f"Testing data shape: X_test={X_test.shape}, y_test={y_test.shape}")
+
+# --- 3. Build the Linear Regression Model ---
+# Create an instance of the LinearRegression model.
+model = LinearRegression()
+
+# Train the model using the training data.
+# The 'fit' method learns the coefficients (slope) and intercept of the linear relationship.
+print("\nTraining the Linear Regression model...")
+model.fit(X_train, y_train)
+print("Model training complete.")
+
+# --- 4. Display model parameters ---
+# The coefficient (slope) represents how much 'y' changes for a one-unit change in 'X'.
+# The intercept is the value of 'y' when 'X' is zero.
+print(f"\nModel Coefficients (slope): {model.coef_[0][0]:.2f}")
+print(f"Model Intercept: {model.intercept_[0]:.2f}")
+
+# --- 5. Make predictions on the test set ---
+# Use the trained model to predict 'y' values for the unseen 'X_test' data.
+y_pred = model.predict(X_test)
+
+# --- 6. Evaluate the Model's Performance ---
+# Calculate the Mean Squared Error (MSE).
+# MSE measures the average of the squares of the errors (the difference between actual and predicted values).
+# A lower MSE indicates a better fit of the model to the data.
+mse = mean_squared_error(y_test, y_pred)
+print(f"\nMean Squared Error (MSE) on the test set: {mse:.2f}")
+
+# --- 7. Visualize the results (Optional but Recommended) ---
+plt.figure(figsize=(10, 6))
+plt.scatter(X_test, y_test, color='blue', label='Actual Test Data')
+plt.plot(X_test, y_pred, color='red', linewidth=2, label='Predicted Regression Line')
+plt.title('Linear Regression: Actual vs. Predicted Values')
+plt.xlabel('Input Feature (X)')
+plt.ylabel('Output (y)')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+print("\n--- Summary ---")
+print("A simple linear regression model was built and trained on a synthetic dataset.")
+print("The model's coefficients and intercept were determined, and its performance was evaluated using Mean Squared Error.")
+print("The plot shows how well the regression line fits the actual test data.")
