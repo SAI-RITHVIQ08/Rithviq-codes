@@ -1,0 +1,167 @@
+import React, { useState, useEffect, useRef } from 'react';
+
+function App() {
+    // State to store chat messages. Each message is an object with 'sender' (user/bot) and 'text'.
+    const [messages, setMessages] = useState([]);
+    // State to hold the current message typed by the user.
+    const [inputMessage, setInputMessage] = useState('');
+    // State to indicate if a response is currently being generated (for loading indicator).
+    const [isLoading, setIsLoading] = useState(false);
+    // Ref to automatically scroll to the bottom of the chat window.
+    const messagesEndRef = useRef(null);
+
+    // Effect to scroll to the bottom whenever new messages are added.
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
+
+    // Function to scroll the chat window to the latest message.
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    // Function to send a message and get a response from the chatbot.
+    const sendMessage = async () => {
+        // Do not send empty messages.
+        if (inputMessage.trim() === '') return;
+
+        // Add the user's message to the chat history.
+        const userMessage = { sender: 'user', text: inputMessage };
+        setMessages((prevMessages) => [...prevMessages, userMessage]);
+        // Clear the input field.
+        setInputMessage('');
+        // Show loading indicator.
+        setIsLoading(true);
+
+        try {
+            // Prepare chat history for the Gemini API call.
+            // The API expects a specific format: { role: "user" | "model", parts: [{ text: "..." }] }.
+            let chatHistory = [];
+            messages.forEach(msg => {
+                chatHistory.push({ role: msg.sender === 'user' ? 'user' : 'model', parts: [{ text: msg.text }] });
+            });
+            // Add the current user message to the history for the API call.
+            chatHistory.push({ role: "user", parts: [{ text: inputMessage }] });
+
+            // Define the payload for the Gemini API request.
+            const payload = {
+                contents: chatHistory,
+            };
+
+            // API key is left empty; Canvas will automatically provide it at runtime.
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            // Make the API call to Gemini.
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+
+            // Extract the bot's response text from the API result.
+            let botResponseText = "I'm sorry, I couldn't generate a response at this time.";
+            if (result.candidates && result.candidates.length > 0 &&
+                result.candidates[0].content && result.candidates[0].content.parts &&
+                result.candidates[0].content.parts.length > 0) {
+                botResponseText = result.candidates[0].content.parts[0].text;
+            }
+
+            // Add the bot's response to the chat history.
+            setMessages((prevMessages) => [...prevMessages, { sender: 'bot', text: botResponseText }]);
+
+        } catch (error) {
+            // Log and display an error message if the API call fails.
+            console.error('Error generating response:', error);
+            setMessages((prevMessages) => [...prevMessages, { sender: 'bot', text: 'Oops! Something went wrong. Please try again.' }]);
+        } finally {
+            // Hide loading indicator regardless of success or failure.
+            setIsLoading(false);
+        }
+    };
+
+    // Handle 'Enter' key press in the input field to send messages.
+    const handleKeyPress = (e) => {
+        if (e.key === 'Enter' && !isLoading) {
+            sendMessage();
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 font-sans">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md flex flex-col h-[80vh]">
+                {/* Chat Header */}
+                <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white p-4 rounded-t-lg flex items-center justify-between">
+                    <h1 className="text-xl font-bold">Simple Chatbot</h1>
+                    {/* Chat icon */}
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 4v-4z" />
+                    </svg>
+                </div>
+
+                {/* Chat Messages Area */}
+                <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                    {/* Display a welcome message if no messages are present */}
+                    {messages.length === 0 && (
+                        <div className="text-center text-gray-500 mt-10">
+                            Type a message to start chatting!
+                        </div>
+                    )}
+                    {/* Map through messages and display them */}
+                    {messages.map((msg, index) => (
+                        <div
+                            key={index}
+                            className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                        >
+                            <div
+                                className={`max-w-[70%] p-3 rounded-xl shadow-md ${
+                                    msg.sender === 'user'
+                                        ? 'bg-blue-500 text-white rounded-br-none' // User message style
+                                        : 'bg-gray-200 text-gray-800 rounded-bl-none' // Bot message style
+                                }`}
+                            >
+                                {msg.text}
+                            </div>
+                        </div>
+                    ))}
+                    {/* Loading indicator when the bot is thinking */}
+                    {isLoading && (
+                        <div className="flex justify-start">
+                            <div className="max-w-[70%] p-3 rounded-xl shadow-md bg-gray-200 text-gray-800 rounded-bl-none">
+                                <div className="flex items-center">
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900 mr-2"></div>
+                                    Thinking...
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    <div ref={messagesEndRef} /> {/* Element to scroll to */}
+                </div>
+
+                {/* Chat Input Area */}
+                <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex items-center">
+                    <input
+                        type="text"
+                        className="flex-1 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Type your message..."
+                        value={inputMessage}
+                        onChange={(e) => setInputMessage(e.target.value)}
+                        onKeyPress={handleKeyPress}
+                        disabled={isLoading} // Disable input while loading
+                    />
+                    <button
+                        onClick={sendMessage}
+                        className="ml-3 px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={isLoading} // Disable button while loading
+                    >
+                        Send
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export default App;
