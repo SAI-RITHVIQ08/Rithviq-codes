@@ -1,0 +1,182 @@
+# Import necessary libraries
+import tensorflow as tf
+from tensorflow.keras import layers, models
+from tensorflow.keras.datasets import cifar10 # Changed from fashion_mnist
+from tensorflow.keras.utils import to_categorical
+import matplotlib.pyplot as plt
+import numpy as np
+
+print("--- Starting Image Classification with CNN (CIFAR-10 & Hyperparameter Tuning) ---")
+
+# --- 1. Load and Preprocess the CIFAR-10 Dataset ---
+# CIFAR-10 is a dataset of 60,000 32x32 color images in 10 classes,
+# with 6,000 images per class. There are 50,000 training images and 10,000 test images.
+print("\nLoading CIFAR-10 dataset...")
+(train_images, train_labels), (test_images, test_labels) = cifar10.load_data()
+
+# CIFAR-10 images are already 32x32 with 3 color channels, so no reshaping needed here
+# However, ensure the data type is float32 and normalize pixel values.
+train_images = train_images.astype('float32') / 255
+test_images = test_images.astype('float32') / 255
+
+# Convert labels to one-hot encoding.
+train_labels = to_categorical(train_labels)
+test_labels = to_categorical(test_labels)
+
+print(f"Training images shape: {train_images.shape}") # Expected: (50000, 32, 32, 3)
+print(f"Training labels shape: {train_labels.shape}") # Expected: (50000, 10)
+print(f"Test images shape: {test_images.shape}")     # Expected: (10000, 32, 32, 3)
+print(f"Test labels shape: {test_labels.shape}")     # Expected: (10000, 10)
+print("Dataset loaded and preprocessed.")
+
+# Define class names for CIFAR-10
+cifar10_class_names = ['airplane', 'automobile', 'bird', 'cat', 'deer',
+                       'dog', 'frog', 'horse', 'ship', 'truck']
+
+# --- 2. Define the Convolutional Neural Network (CNN) Model Function ---
+# Encapsulate model building in a function for hyperparameter tuning
+def build_cnn_model(input_shape=(32, 32, 3), num_classes=10):
+    model = models.Sequential()
+
+    # First Convolutional Block
+    # Input shape is now (32, 32, 3) for CIFAR-10 color images
+    model.add(layers.Conv2D(32, (3, 3), activation='relu', input_shape=input_shape))
+    model.add(layers.MaxPooling2D((2, 2)))
+
+    # Second Convolutional Block
+    model.add(layers.Conv2D(64, (3, 3), activation='relu'))
+    model.add(layers.MaxPooling2D((2, 2)))
+
+    # Third Convolutional Block
+    model.add(layers.Conv2D(128, (3, 3), activation='relu')) # Increased filters for deeper features
+    model.add(layers.MaxPooling2D((2, 2))) # Added another pooling layer
+
+    # Flatten and Dense layers
+    model.add(layers.Flatten())
+    model.add(layers.Dense(128, activation='relu')) # Increased units
+    model.add(layers.Dense(num_classes, activation='softmax')) # Output layer for 10 classes
+
+    return model
+
+# --- 3. Hyperparameter Tuning ---
+# We'll try a few combinations of epochs and batch sizes.
+# In a real-world scenario, you'd use techniques like GridSearchCV, Keras Tuner,
+# or Weights & Biases for more systematic hyperparameter optimization.
+
+# Define hyperparameter options
+epochs_to_try = [5, 10]
+batch_sizes_to_try = [32, 64]
+
+best_accuracy = 0
+best_params = {}
+tuning_results = []
+
+print("\n--- Starting Hyperparameter Tuning ---")
+for epochs in epochs_to_try:
+    for batch_size in batch_sizes_to_try:
+        print(f"\nTraining with Epochs: {epochs}, Batch Size: {batch_size}")
+
+        # Build a fresh model for each combination
+        model = build_cnn_model()
+
+        # Compile the model
+        model.compile(optimizer='adam',
+                      loss='categorical_crossentropy',
+                      metrics=['accuracy'])
+
+        # Train the model
+        history = model.fit(train_images, train_labels,
+                            epochs=epochs,
+                            batch_size=batch_size,
+                            validation_data=(test_images, test_labels),
+                            verbose=0) # Set verbose to 0 to suppress per-epoch output during tuning
+
+        # Evaluate the model
+        test_loss, test_acc = model.evaluate(test_images, test_labels, verbose=0)
+        print(f"  Test Accuracy: {test_acc:.4f}, Test Loss: {test_loss:.4f}")
+
+        tuning_results.append({
+            'epochs': epochs,
+            'batch_size': batch_size,
+            'test_accuracy': test_acc,
+            'test_loss': test_loss,
+            'history': history # Store history for plotting later if needed
+        })
+
+        if test_acc > best_accuracy:
+            best_accuracy = test_acc
+            best_params = {'epochs': epochs, 'batch_size': batch_size}
+
+print("\n--- Hyperparameter Tuning Results ---")
+for result in tuning_results:
+    print(f"Epochs: {result['epochs']}, Batch Size: {result['batch_size']} -> Test Acc: {result['test_accuracy']:.4f}")
+
+print(f"\nBest Test Accuracy: {best_accuracy:.4f} with parameters: {best_params}")
+
+# --- 4. Train the Final Model with Best Parameters (or a chosen set) ---
+# For demonstration, we'll use the best parameters found.
+# You might choose to train longer or with more data in a real application.
+print(f"\nTraining final model with best parameters: Epochs={best_params['epochs']}, Batch Size={best_params['batch_size']}")
+final_model = build_cnn_model()
+final_model.compile(optimizer='adam',
+                    loss='categorical_crossentropy',
+                    metrics=['accuracy'])
+
+final_history = final_model.fit(train_images, train_labels,
+                                epochs=best_params['epochs'],
+                                batch_size=best_params['batch_size'],
+                                validation_data=(test_images, test_labels))
+
+# --- 5. Evaluate the Final Model's Performance ---
+print("\nEvaluating the final model on the test set...")
+final_test_loss, final_test_acc = final_model.evaluate(test_images, test_labels, verbose=2)
+print(f"\nFinal Test accuracy: {final_test_acc:.4f}")
+print(f"Final Test loss: {final_test_loss:.4f}")
+print("Model evaluation complete.")
+
+# --- 6. Visualize Training History of the Final Model ---
+plt.figure(figsize=(12, 5))
+
+plt.subplot(1, 2, 1)
+plt.plot(final_history.history['accuracy'], label='Training Accuracy')
+plt.plot(final_history.history['val_accuracy'], label='Validation Accuracy')
+plt.title('Final Model Accuracy')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.legend()
+plt.grid(True)
+
+plt.subplot(1, 2, 2)
+plt.plot(final_history.history['loss'], label='Training Loss')
+plt.plot(final_history.history['val_loss'], label='Validation Loss')
+plt.title('Final Model Loss')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.legend()
+plt.grid(True)
+
+plt.tight_layout()
+plt.show()
+
+# --- 7. Make Predictions on a few test images from the Final Model ---
+print("\nMaking predictions on a few test images from the final model...")
+predictions = final_model.predict(test_images[:5]) # Predict on the first 5 test images
+
+for i in range(5):
+    predicted_label = np.argmax(predictions[i])
+    true_label = np.argmax(test_labels[i])
+    print(f"Image {i+1}:")
+    print(f"  Predicted: {cifar10_class_names[predicted_label]} (Confidence: {np.max(predictions[i]):.2f})")
+    print(f"  Actual: {cifar10_class_names[true_label]}")
+
+    plt.imshow(test_images[i]) # No reshape needed for color images
+    plt.title(f"Predicted: {cifar10_class_names[predicted_label]}, Actual: {cifar10_class_names[true_label]}")
+    plt.axis('off')
+    plt.show()
+
+print("\n--- Image Classification CNN Summary ---")
+print("A Convolutional Neural Network (CNN) was built and trained on the CIFAR-10 dataset.")
+print("The dataset was preprocessed, and a basic hyperparameter tuning process was performed for epochs and batch size.")
+print(f"The final model was trained with the best parameters found (Epochs: {best_params['epochs']}, Batch Size: {best_params['batch_size']})")
+print(f"It achieved a final test accuracy of approximately {final_test_acc * 100:.2f}%.")
+print("Training history (accuracy and loss) was plotted, and predictions were made on a few test images.")
